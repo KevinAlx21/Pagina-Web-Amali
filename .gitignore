@@ -1,0 +1,19 @@
+# Ignorar node_modules
+node_modules/
+
+# Ignorar archivos de entorno (TUS CLAVES SECRETAS)
+.env
+.env.local
+.env.production
+
+# Ignorar builds
+dist/
+build/
+
+# Ignorar carpetas de Vercel y Render
+.vercel
+.render
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
