@@ -1,6 +1,6 @@
 // src/pages/Nosotros.jsx
 import { Link } from 'react-router-dom';
-import logo from '../assets/logo.png';
+import nosotros from "../assets/nosotros.jpg";
 
 export default function Nosotros() {
   return (
@@ -24,8 +24,8 @@ export default function Nosotros() {
           {/* Imagen */}
           <div className="flex justify-center">
             <img 
-              src={logo} 
-              alt="Amali Detalles" 
+              src={nosotros} 
+              alt="Nosotros - Amali Detalles"
               className="w-48 sm:w-64 md:w-80 object-contain drop-shadow-lg"
             />
           </div>
