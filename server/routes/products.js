@@ -13,28 +13,31 @@ const router = express.Router();
 const storage = multer.memoryStorage();
 
 const upload = multer({
+
   storage,
 
-  limits: {
-    fileSize: 10 * 1024 * 1024, // máximo 10MB
+  limits:{
+    fileSize:10 * 1024 * 1024
   },
 
-  fileFilter: (req, file, cb) => {
+  fileFilter:(req,file,cb)=>{
 
-    const allowed = [
+    const allowed=[
       "image/jpeg",
       "image/png",
       "image/webp",
       "image/jpg"
     ];
 
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
+
+    if(allowed.includes(file.mimetype)){
+      cb(null,true);
+    }else{
       cb(new Error("Formato de imagen no permitido"));
     }
 
   }
+
 });
 
 
@@ -43,35 +46,36 @@ const upload = multer({
 // GET Productos
 // ======================
 
-router.get("/", async (req, res) => {
+router.get("/", async(req,res)=>{
 
-  try {
+try{
 
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .order("created_at", {
-        ascending: false
-      });
-
-
-    if (error) throw error;
+const {data,error}=await supabase
+.from("products")
+.select("*")
+.order("created_at",{
+ ascending:false
+});
 
 
-    res.json(data);
+if(error) throw error;
 
 
-  } catch (err) {
+res.json(data);
 
-    console.error(err);
 
-    res.status(500).json({
-      error: err.message
-    });
+}catch(err){
 
-  }
+console.error(err);
+
+res.status(500).json({
+ error:err.message
+});
+
+}
 
 });
+
 
 
 
@@ -80,174 +84,31 @@ router.get("/", async (req, res) => {
 // GET Categorías
 // ======================
 
-router.get("/categories", async (req, res) => {
-
-  try {
-
-    const { data, error } = await supabase
-      .from("categories")
-      .select("*")
-      .order("name");
-
-
-    if(error) throw error;
-
-
-    const categories = data.map(cat => ({
-      value: cat.slug,
-      label: cat.name
-    }));
-
-
-    res.json(categories);
-
-
-  } catch(err){
-
-    console.error(err);
-
-    res.status(500).json({
-      error: err.message
-    });
-
-  }
-
-});
-
-
-
-
-// ======================
-// POST Crear producto
-// ======================
-
-
-router.post("/", upload.single("image"), async(req,res)=>{
+router.get("/categories", async(req,res)=>{
 
 try{
 
 
-const {
-  name,
-  description,
-  price,
-  category
-}=req.body;
+const {data,error}=await supabase
+.from("categories")
+.select("*")
+.order("name");
+
+
+if(error) throw error;
 
 
 
-if(!req.file){
+const categories=data.map(cat=>({
 
- return res.status(400).json({
-   error:"Debe seleccionar una imagen"
- });
+ value:cat.slug,
+ label:cat.name
 
-}
-
+}));
 
 
 
-const validCategory =
-CATEGORIES.find(
- c=>c.value===category
-);
-
-
-
-if(!validCategory){
-
- return res.status(400).json({
-   error:"Categoría inválida"
- });
-
-}
-
-
-
-// Optimizar imagen
-
-const optimizedImage =
-await optimizeImage(
- req.file.buffer
-);
-
-
-
-
-// Nombre único
-
-const fileName =
-`${Date.now()}.webp`;
-
-
-
-
-// Subir a Storage
-
-
-const {
- error:uploadError
-}=await supabase.storage
-.from("products")
-.upload(
- fileName,
- optimizedImage,
- {
-   contentType:"image/webp"
- }
-);
-
-
-
-if(uploadError)
- throw uploadError;
-
-
-
-
-// URL pública
-
-const {
- data:{
-  publicUrl
- }
-}=supabase.storage
-.from("products")
-.getPublicUrl(fileName);
-
-
-
-
-// Guardar producto
-
-const {
- data,
- error
-}=await supabase
-.from("products")
-.insert({
-
- name,
- description,
-
- price:Number(price),
-
- category,
-
- image:publicUrl
-
-})
-.select()
-.single();
-
-
-
-if(error)
- throw error;
-
-
-
-res.status(201).json(data);
+res.json(categories);
 
 
 
@@ -269,177 +130,415 @@ res.status(500).json({
 
 
 
+
 // ======================
-// PUT Producto
+// POST Crear producto
 // ======================
-router.put("/:id", upload.single("image"), async (req, res) => {
 
-  try {
+router.post("/",upload.single("image"),async(req,res)=>{
 
-    // Buscar producto actual
-    const { data: oldProduct, error: findError } = await supabase
-      .from("products")
-      .select("*")
-      .eq("id", req.params.id)
-      .single();
 
+try{
 
-    if (findError || !oldProduct) {
-      return res.status(404).json({
-        error: "Producto no encontrado"
-      });
-    }
 
+const {
+ name,
+ description,
+ price,
+ category
 
+}=req.body;
 
-    const updates = {};
 
 
-    if (req.body.name)
-      updates.name = req.body.name;
+if(!req.file){
 
+return res.status(400).json({
 
-    if (req.body.description)
-      updates.description = req.body.description;
+error:"Debe seleccionar una imagen"
 
+});
 
-    if (req.body.price)
-      updates.price = Number(req.body.price);
+}
 
 
-    if (req.body.category)
-      updates.category = req.body.category;
 
 
+// validar categoría
 
-    // ============================
-    // SI CAMBIA LA IMAGEN
-    // ============================
+const {
+data:categoryExists,
+error:categoryError
 
-    if (req.file) {
+}=await supabase
+.from("categories")
+.select("slug")
+.eq("slug",category)
+.single();
 
 
-      // Crear nombre nuevo
-      const fileName = `${Date.now()}.webp`;
 
+if(categoryError || !categoryExists){
 
-      // Subir nueva imagen
+return res.status(400).json({
 
-      const { error: uploadError } = await supabase.storage
-        .from("products")
-        .upload(
-          fileName,
-          req.file.buffer,
-          {
-            contentType: req.file.mimetype
-          }
-        );
+error:"Categoría inválida"
 
+});
 
-      if (uploadError) throw uploadError;
+}
 
 
 
-      const {
-        data:{publicUrl}
-      } = supabase.storage
-        .from("products")
-        .getPublicUrl(fileName);
 
 
+// optimizar imagen
 
-      updates.image = publicUrl;
+const optimizedImage=
+await optimizeImage(
+req.file.buffer
+);
 
 
 
-      // ============================
-      // BORRAR IMAGEN ANTIGUA
-      // ============================
 
+// nombre archivo
 
-      if(oldProduct.image){
+const fileName=
+`${Date.now()}.webp`;
 
 
-        const oldFileName = oldProduct.image
-          .split("/")
-          .pop();
 
 
+// subir imagen
 
-        const { error: deleteError } =
-          await supabase.storage
-          .from("products")
-          .remove([
-            oldFileName
-          ]);
+const {
+error:uploadError
 
+}=await supabase.storage
+.from("products")
+.upload(
+fileName,
+optimizedImage,
+{
+contentType:"image/webp"
+}
+);
 
 
-        if(deleteError){
 
-          console.log(
-            "No se pudo borrar imagen antigua:",
-            deleteError.message
-          );
+if(uploadError)
+throw uploadError;
 
-        }
 
 
-      }
 
+// URL pública
 
-    }
+const {
+data:{
+publicUrl
 
+}
 
+}=supabase.storage
+.from("products")
+.getPublicUrl(fileName);
 
-    // Actualizar producto
 
-    const { data, error } = await supabase
-      .from("products")
-      .update(updates)
-      .eq("id", req.params.id)
-      .select()
-      .single();
 
 
 
-    if(error) throw error;
 
+// guardar producto
 
+const {
+data,
+error
 
-    res.json(data);
+}=await supabase
+.from("products")
+.insert({
 
+name,
+description,
+price:Number(price),
+category,
+image:publicUrl
 
+})
+.select()
+.single();
 
-  } catch(err){
 
-    console.error(err);
 
-    res.status(500).json({
-      error: err.message
-    });
+if(error)
+throw error;
 
-  }
+
+
+res.status(201).json(data);
+
+
+
+}catch(err){
+
+
+console.error(err);
+
+
+res.status(500).json({
+
+error:err.message
+
+});
+
+
+}
+
 
 });
 
 
 
 
+
+
+
 // ======================
-// DELETE Producto + Imagen Storage
+// PUT Actualizar producto
 // ======================
 
-router.delete("/:id", async(req,res)=>{
+router.put("/:id",upload.single("image"),async(req,res)=>{
+
 
 try{
 
 
-// 1. Buscar producto antes de eliminar
+const {
+data:oldProduct,
+error:findError
+
+}=await supabase
+.from("products")
+.select("*")
+.eq("id",req.params.id)
+.single();
+
+
+
+if(findError || !oldProduct){
+
+return res.status(404).json({
+
+error:"Producto no encontrado"
+
+});
+
+}
+
+
+
+
+const updates={};
+
+
+
+if(req.body.name)
+updates.name=req.body.name;
+
+
+
+if(req.body.description)
+updates.description=req.body.description;
+
+
+
+if(req.body.price)
+updates.price=Number(req.body.price);
+
+
+
+if(req.body.category){
 
 const {
-data: product,
-error: findError
+data:cat,
+error
+
+}=await supabase
+.from("categories")
+.select("slug")
+.eq("slug",req.body.category)
+.single();
+
+
+if(error || !cat){
+
+return res.status(400).json({
+
+error:"Categoría inválida"
+
+});
+
+}
+
+
+updates.category=req.body.category;
+
+
+}
+
+
+
+
+
+
+// nueva imagen
+
+if(req.file){
+
+
+
+const optimizedImage=
+await optimizeImage(
+req.file.buffer
+);
+
+
+
+const fileName=
+`${Date.now()}.webp`;
+
+
+
+const {
+error:uploadError
+
+}=await supabase.storage
+.from("products")
+.upload(
+fileName,
+optimizedImage,
+{
+contentType:"image/webp"
+}
+);
+
+
+
+if(uploadError)
+throw uploadError;
+
+
+
+
+const {
+data:{
+publicUrl
+
+}
+
+}=supabase.storage
+.from("products")
+.getPublicUrl(fileName);
+
+
+
+updates.image=publicUrl;
+
+
+
+
+
+// borrar imagen anterior
+
+
+if(oldProduct.image){
+
+
+const oldFile=
+oldProduct.image
+.split("/")
+.pop();
+
+
+
+await supabase.storage
+.from("products")
+.remove([
+oldFile
+]);
+
+
+}
+
+
+}
+
+
+
+
+const {
+data,
+error
+
+}=await supabase
+.from("products")
+.update(updates)
+.eq("id",req.params.id)
+.select()
+.single();
+
+
+
+if(error)
+throw error;
+
+
+
+res.json(data);
+
+
+
+}catch(err){
+
+
+console.error(err);
+
+
+res.status(500).json({
+
+error:err.message
+
+});
+
+
+}
+
+
+});
+
+
+
+
+
+
+
+
+// ======================
+// DELETE Producto
+// ======================
+
+router.delete("/:id",async(req,res)=>{
+
+
+try{
+
+
+const {
+data:product,
+error
+
 }=await supabase
 .from("products")
 .select("image")
@@ -448,75 +547,37 @@ error: findError
 
 
 
-if(findError){
-
-throw findError;
-
-}
+if(error)
+throw error;
 
 
-
-
-// 2. Obtener nombre del archivo
 
 if(product?.image){
 
 
-const imageUrl = product.image;
-
-
-// ejemplo:
-// https://xxx.supabase.co/storage/v1/object/public/products/173928382.webp
-
-
-const fileName =
-imageUrl.split("/").pop();
+const fileName=
+product.image
+.split("/")
+.pop();
 
 
 
-console.log(
-"Eliminando imagen:",
-fileName
-);
-
-
-
-
-// 3. Borrar imagen Storage
-
-
-const {
-error:storageError
-}=await supabase.storage
+await supabase.storage
 .from("products")
 .remove([
 fileName
 ]);
 
 
-
-if(storageError){
-
-console.error(
-"Error eliminando imagen:",
-storageError
-);
-
 }
 
 
 
-}
-
-
-
-
-
-// 4. Borrar producto BD
 
 
 const {
-error
+error:deleteError
+
 }=await supabase
 .from("products")
 .delete()
@@ -527,16 +588,14 @@ req.params.id
 
 
 
-if(error)
-throw error;
-
+if(deleteError)
+throw deleteError;
 
 
 
 res.json({
 
-message:
-"Producto e imagen eliminados correctamente"
+message:"Producto eliminado correctamente"
 
 });
 
@@ -559,5 +618,7 @@ error:err.message
 
 
 });
+
+
 
 export default router;
