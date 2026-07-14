@@ -1,6 +1,5 @@
 import express from "express";
 import multer from "multer";
-import CATEGORIES from "../data/categories.js";
 import { supabase } from "../supabaseClient.js";
 import { optimizeImage } from "../utils/image.js";
 
@@ -81,9 +80,37 @@ router.get("/", async (req, res) => {
 // GET Categorías
 // ======================
 
-router.get("/categories", (req, res)=>{
+router.get("/categories", async (req, res) => {
 
-  res.json(CATEGORIES);
+  try {
+
+    const { data, error } = await supabase
+      .from("categories")
+      .select("*")
+      .order("name");
+
+
+    if(error) throw error;
+
+
+    const categories = data.map(cat => ({
+      value: cat.slug,
+      label: cat.name
+    }));
+
+
+    res.json(categories);
+
+
+  } catch(err){
+
+    console.error(err);
+
+    res.status(500).json({
+      error: err.message
+    });
+
+  }
 
 });
 

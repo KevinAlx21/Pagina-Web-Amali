@@ -74,7 +74,7 @@ export default function Catalog() {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
         {filtered.map((product) => (
           <ProductCard
-            key={product._id}
+            key={product.id}
             product={product}
             onClick={() => openModal(product)}
           />
